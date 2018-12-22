@@ -14,7 +14,7 @@
          FlutterApplication and put your custom class here. -->
     <application
         android:name="io.flutter.app.FlutterApplication"
-        android:label="help_babushke"
+        android:label="Волонтерская хуйня"
         android:icon="@mipmap/ic_launcher">
         <meta-data android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyC3fa8wSCvvrFlDyvPb9Bfg8IQb-ZJsDuo"/>

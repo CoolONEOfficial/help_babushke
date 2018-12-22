@@ -7,8 +7,11 @@ import 'package:help_babushke/models.dart';
 
 bool isLoggedIn;
 
+const ROUTE_MAP = "/";
+const ROUTE_ABOUT = "/about";
 const ROUTE_AUTH = "/auth";
-const ROUTE_HOME = "/";
+
+const ROUTE_HOME = ROUTE_MAP;
 
 void main() async {
   final user = await FirebaseAuth.instance.currentUser();
@@ -23,41 +26,104 @@ void main() async {
           ? ROUTE_HOME
           : ROUTE_AUTH,
       routes: {
-        ROUTE_HOME: (context) => Scaffold(
-              appBar: AppBar(title: const Text('Help volunteers')),
-              body: MapsDemo(),
-            ),
+        ROUTE_HOME: (context) => HomeScreen(),
         ROUTE_AUTH: (context) => AuthScreen(),
       },
     ),
   );
 }
 
-class MapsDemo extends StatefulWidget {
+class HomeScreen extends StatefulWidget {
+  LatLng initCoord = new LatLng(56.328619, 44.002833);
+
   @override
-  State createState() => MapsDemoState();
+  State createState() => HomeScreenState();
 }
 
-class MapsDemoState extends State<MapsDemo> {
+enum HomeScreenType {
+  MAP,
+  LIST,
+}
+
+class HomeScreenState extends State<HomeScreen> {
   GoogleMapController mapController;
 
+  HomeScreenType type = HomeScreenType.MAP;
   final Map<String, TaskModel> tasks = Map<String, TaskModel>();
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        GoogleMap(
-          onMapCreated: _onMapCreated,
-          options: GoogleMapOptions(
-            cameraPosition: CameraPosition(
-              target: LatLng(56.328619, 44.002833),
-              zoom: 17.0,
-              tilt: 30.0,
+    return Scaffold(
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: <Widget>[
+            DrawerHeader(
+              child: Text('Хедер хуедр'),
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
             ),
-          ),
+            ListTile(
+              title: Text('Помочь даше путешествиннице найти карту'),
+              onTap: () {
+                setState(() => type = HomeScreenType.MAP);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: Text('Открыть гл.лист'),
+              onTap: () {
+                setState(() => type = HomeScreenType.LIST);
+                Navigator.pop(context);
+              },
+            ),
+          ],
         ),
-      ],
+      ),
+      appBar: AppBar(
+          title: Text(type == HomeScreenType.MAP
+              ? 'Всем картам карта'
+              : "Всем спискам списк")),
+      body: type == HomeScreenType.MAP
+          ? GoogleMap(
+              onMapCreated: _onMapCreated,
+              options: GoogleMapOptions(
+                cameraPosition: CameraPosition(
+                  target: widget.initCoord,
+                  zoom: 17.0,
+                  tilt: 30.0,
+                ),
+              ),
+            )
+          : ListView.builder(
+              itemCount: tasks.length,
+              itemBuilder: (context, index) => GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        type = HomeScreenType.MAP;
+                      });
+                      final coord = tasks.values
+                          .elementAt(index)
+                          .vars[TaskNames.coord.index] as GeoPoint;
+                      widget.initCoord =
+                          LatLng(coord.latitude, coord.longitude);
+                    },
+                    child: Card(
+                      child: Container(
+                        height: 100,
+                        child: Center(
+                          child: Text(
+                            tasks.values
+                                .elementAt(index)
+                                .vars[TaskNames.name.index] as String,
+                            style: Theme.of(context).textTheme.title,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+            ),
     );
   }
 
@@ -73,7 +139,7 @@ class MapsDemoState extends State<MapsDemo> {
             style: Theme.of(context).textTheme.title,
           ),
           Text(
-            "Level: ${markerTask.vars[TaskNames.level.index]}",
+            "Важность: ${markerTask.vars[TaskNames.level.index]}",
             style: Theme.of(context).textTheme.title,
           ),
         ],
