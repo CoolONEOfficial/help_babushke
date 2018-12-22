@@ -28,6 +28,7 @@ void main() async {
       routes: {
         ROUTE_HOME: (context) => HomeScreen(),
         ROUTE_AUTH: (context) => AuthScreen(),
+        ROUTE_ABOUT: (context) => AboutScreen(),
       },
     ),
   );
@@ -43,6 +44,7 @@ class HomeScreen extends StatefulWidget {
 enum HomeScreenType {
   MAP,
   LIST,
+  REQUESTS,
 }
 
 class HomeScreenState extends State<HomeScreen> {
@@ -51,79 +53,186 @@ class HomeScreenState extends State<HomeScreen> {
   HomeScreenType type = HomeScreenType.MAP;
   final Map<String, TaskModel> tasks = Map<String, TaskModel>();
 
+  FirebaseUser user;
+  UserModel userModel;
+
+  @override
+  void initState() {
+    FirebaseAuth.instance.currentUser().then((user) async {
+      this.user = user;
+      userModel = UserModel(await Firestore.instance
+          .collection("users")
+          .document(user.uid)
+          .get());
+      setState(() {});
+    });
+
+    // TODO: implement initState
+    super.initState();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final drawerWidgets = <Widget>[
+      UserAccountsDrawerHeader(
+        accountName: Text(user?.displayName ?? ""),
+        accountEmail: Text(user?.email ?? ""),
+        currentAccountPicture: new CircleAvatar(
+            backgroundColor: Colors.brown,
+            child: Text(user?.displayName
+                    ?.split(' ')
+                    ?.expand((m) => <String>[m[0]])
+                    ?.join() ??
+                "")),
+      ),
+      ListTile(
+        title: Text('Помочь даше путешествиннице найти карту'),
+        onTap: () {
+          setState(() => type = HomeScreenType.MAP);
+          Navigator.pop(context);
+        },
+      ),
+      ListTile(
+        title: Text('Открыть список'),
+        onTap: () {
+          setState(() => type = HomeScreenType.LIST);
+          Navigator.pop(context);
+        },
+      ),
+      ListTile(
+        title: Text('О приложении'),
+        onTap: () {
+          Navigator.popAndPushNamed(context, ROUTE_ABOUT);
+        },
+      ),
+    ];
+
+    if (userModel != null && userModel.vars[UserNames.admin.index]) {
+      drawerWidgets.add(
+        ListTile(
+          title: Text('Новобранцы'),
+          onTap: () {
+            setState(() => type = HomeScreenType.REQUESTS);
+            Navigator.pop(context);
+          },
+        ),
+      );
+    }
+
+    Widget body;
+    String title;
+
+    switch (type) {
+      case HomeScreenType.MAP:
+        title = "Карта";
+        body = GoogleMap(
+          onMapCreated: _onMapCreated,
+          options: GoogleMapOptions(
+            cameraPosition: CameraPosition(
+              target: widget.initCoord,
+              zoom: 17.0,
+              tilt: 30.0,
+            ),
+          ),
+        );
+        break;
+      case HomeScreenType.LIST:
+        title = "Список";
+        body = ListView.builder(
+          itemCount: tasks.length,
+          itemBuilder: (context, index) => GestureDetector(
+                onTap: () {
+                  setState(() {
+                    type = HomeScreenType.MAP;
+                  });
+                  final coord = tasks.values
+                      .elementAt(index)
+                      .vars[TaskNames.coord.index] as GeoPoint;
+                  widget.initCoord = LatLng(coord.latitude, coord.longitude);
+                },
+                child: Card(
+                  child: Container(
+                    height: 100,
+                    child: Center(
+                      child: Text(
+                        tasks.values.elementAt(index).vars[TaskNames.name.index]
+                            as String,
+                        style: Theme.of(context).textTheme.title,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+        );
+        break;
+      case HomeScreenType.REQUESTS:
+        title = "Новобранцы";
+        body = StreamBuilder<QuerySnapshot>(
+          stream: Firestore.instance
+              .collection("organisationRequests")
+              // .where('orgId', isEqualTo: userModel.vars[UserNames.orgId.index])
+              .getDocuments()
+              .asStream(),
+          builder: (context, snapshotReq) => ListView.builder(
+                itemCount: snapshotReq.data?.documents?.length ?? 0,
+                itemBuilder: (context, index) => StreamBuilder<QuerySnapshot>(
+                      stream: Firestore.instance
+                          .collection("users")
+                          .getDocuments()
+                          .asStream(),
+                      builder: (context, snapshotUsers) => GestureDetector(
+                            onTap: () async {
+                              for (final mDeleteDoc in (await Firestore.instance
+                                      .collection("organisationRequests")
+                                      .where("userId", isEqualTo: user.uid)
+                                      .getDocuments())
+                                  .documents) {
+                                await mDeleteDoc.reference.delete();
+                              }
+                              setState(() {});
+                            },
+                            child: Card(
+                              child: Container(
+                                height: 100,
+                                child: Center(
+                                  child: Text(
+                                    snapshotUsers.data != null
+                                        ? UserModel(
+                                            snapshotUsers.data?.documents
+                                                ?.firstWhere(
+                                              (mDoc) =>
+                                                  mDoc.documentID ==
+                                                  OrgRequestModel(
+                                                    snapshotReq.data.documents
+                                                        .elementAt(index),
+                                                  ).vars[OrgRequestNames
+                                                      .userId.index],
+                                            ),
+                                          ).vars[UserNames.name.index] as String
+                                        : "",
+                                    style: Theme.of(context).textTheme.title,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                    ),
+              ),
+        );
+        break;
+    }
+
     return Scaffold(
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
-          children: <Widget>[
-            DrawerHeader(
-              child: Text('Хедер хуедр'),
-              decoration: BoxDecoration(
-                color: Colors.blue,
-              ),
-            ),
-            ListTile(
-              title: Text('Помочь даше путешествиннице найти карту'),
-              onTap: () {
-                setState(() => type = HomeScreenType.MAP);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              title: Text('Открыть гл.лист'),
-              onTap: () {
-                setState(() => type = HomeScreenType.LIST);
-                Navigator.pop(context);
-              },
-            ),
-          ],
+          children: drawerWidgets,
         ),
       ),
       appBar: AppBar(
-          title: Text(type == HomeScreenType.MAP
-              ? 'Всем картам карта'
-              : "Всем спискам списк")),
-      body: type == HomeScreenType.MAP
-          ? GoogleMap(
-              onMapCreated: _onMapCreated,
-              options: GoogleMapOptions(
-                cameraPosition: CameraPosition(
-                  target: widget.initCoord,
-                  zoom: 17.0,
-                  tilt: 30.0,
-                ),
-              ),
-            )
-          : ListView.builder(
-              itemCount: tasks.length,
-              itemBuilder: (context, index) => GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        type = HomeScreenType.MAP;
-                      });
-                      final coord = tasks.values
-                          .elementAt(index)
-                          .vars[TaskNames.coord.index] as GeoPoint;
-                      widget.initCoord =
-                          LatLng(coord.latitude, coord.longitude);
-                    },
-                    child: Card(
-                      child: Container(
-                        height: 100,
-                        child: Center(
-                          child: Text(
-                            tasks.values
-                                .elementAt(index)
-                                .vars[TaskNames.name.index] as String,
-                            style: Theme.of(context).textTheme.title,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-            ),
+        title: Text(title),
+      ),
+      body: body,
     );
   }
 
@@ -191,6 +300,20 @@ class HomeScreenState extends State<HomeScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class AboutScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    return Scaffold(
+      body: Container(
+        child: Center(
+          child: Text("Мне так хуево в KFC сидеть, все бухают, а я нет(("),
+        ),
+      ),
     );
   }
 }

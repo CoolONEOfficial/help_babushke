@@ -82,3 +82,62 @@ class OrganisationModel {
 
   final List vars;
 }
+
+enum UserNames {
+  name,
+  rating,
+  orgId,
+  admin,
+  phoneNumber,
+}
+
+class UserModel {
+  factory UserModel(DocumentSnapshot snapshot) => UserModel._(
+        List.generate(
+          UserNames.values.length,
+          (index) {
+            switch (UserNames.values[index]) {
+              case UserNames.rating:
+                return DbVar<String>(snapshot, true, "rating").variable;
+              case UserNames.orgId:
+                return DbVar<String>(snapshot, false, "orgId").variable;
+              case UserNames.phoneNumber:
+                return DbVar<String>(snapshot, false, "phoneNumber").variable;
+              case UserNames.name:
+                return DbVar<String>(snapshot, true, "name").variable;
+              case UserNames.admin:
+                return DbVar<bool>(snapshot, false, "admin").variable;
+            }
+          },
+        ),
+      );
+
+  UserModel._(this.vars);
+
+  final List vars;
+}
+
+enum OrgRequestNames {
+  userId,
+  orgId,
+}
+
+class OrgRequestModel {
+  factory OrgRequestModel(DocumentSnapshot snapshot) => OrgRequestModel._(
+        List.generate(
+          OrgRequestNames.values.length,
+          (index) {
+            switch (OrgRequestNames.values[index]) {
+              case OrgRequestNames.userId:
+                return DbVar<String>(snapshot, true, "userId").variable;
+              case OrgRequestNames.orgId:
+                return DbVar<String>(snapshot, true, "orgId").variable;
+            }
+          },
+        ),
+      );
+
+  OrgRequestModel._(this.vars);
+
+  final List vars;
+}
