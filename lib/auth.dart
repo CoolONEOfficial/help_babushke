@@ -22,6 +22,18 @@ class AuthScreen extends StatelessWidget {
     return user;
   }
 
+  void _registerUser(
+    BuildContext context,
+    FirebaseUser user,
+  ) async {
+    await Firestore.instance.collection('users').document(user.uid).setData({
+      'level': 0,
+      'name': user.displayName,
+      'phoneNumber': user.phoneNumber
+    });
+    Navigator.popAndPushNamed(context, ROUTE_HOME);
+  }
+
   void _authRegistration(BuildContext context) async {
     final List<DocumentSnapshot> orgsList =
         (await Firestore.instance.collection("organisations").getDocuments())
@@ -31,17 +43,28 @@ class AuthScreen extends StatelessWidget {
       title: const Text('Выберите организацию в которой состоите'),
       content: ListView.builder(
           itemCount: orgsList.length,
-          itemBuilder: (context, index) => SimpleDialogOption(
-                onPressed: () {},
-                child: Text(
-                  OrganisationModel(orgsList[index])
-                      .vars[OrganisationNames.name.index],
-                  style: Theme.of(context).textTheme.title,
-                ),
-              )),
+          itemBuilder: (context, index) {
+            final model = OrganisationModel(orgsList[index]);
+            return SimpleDialogOption(
+              onPressed: () async {
+                final user = await _handleSignIn();
+                await Firestore.instance
+                    .collection('organisationRequests')
+                    .add({
+                  'userId': user.uid,
+                  'orgId': orgsList[index].documentID,
+                });
+                _registerUser(context, user);
+              },
+              child: Text(
+                model.vars[OrganisationNames.name.index],
+                style: Theme.of(context).textTheme.title,
+              ),
+            );
+          }),
       actions: <Widget>[
         FlatButton(
-          onPressed: () {},
+          onPressed: () async => _registerUser(context, await _handleSignIn()),
           child: Text("Не состою"),
         )
       ],

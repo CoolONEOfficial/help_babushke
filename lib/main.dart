@@ -11,11 +11,17 @@ const ROUTE_AUTH = "/auth";
 const ROUTE_HOME = "/";
 
 void main() async {
+  final user = await FirebaseAuth.instance.currentUser();
   runApp(
     MaterialApp(
-      initialRoute: await FirebaseAuth.instance.currentUser() == null
-          ? ROUTE_AUTH
-          : ROUTE_HOME,
+      initialRoute: user != null &&
+              (await Firestore.instance
+                      .collection("users")
+                      .document(user.uid)
+                      .get()) !=
+                  null
+          ? ROUTE_HOME
+          : ROUTE_AUTH,
       routes: {
         ROUTE_HOME: (context) => Scaffold(
               appBar: AppBar(title: const Text('Help volunteers')),
@@ -51,44 +57,27 @@ class MapsDemoState extends State<MapsDemo> {
             ),
           ),
         ),
-//        RaisedButton(
-//          child: const Text('Go to London'),
-//          onPressed: mapController == null
-//              ? null
-//              : () {
-//                  mapController.animateCamera(CameraUpdate.newCameraPosition(
-//                    const CameraPosition(
-//                      bearing: 270.0,
-//                      target: LatLng(56.328619, 44.002833),
-//                      tilt: 30.0,
-//                      zoom: 17.0,
-//                    ),
-//                  ));
-//                },
-//        ),
       ],
     );
   }
 
   Widget _buildBottomSheet(
     BuildContext context,
-    Marker marker,
-  ) {
-    final markerTask = tasks[marker.id];
-    return Column(
-      mainAxisSize: MainAxisSize.max,
-      children: <Widget>[
-        new Text(
-          markerTask.vars[TaskNames.name.index],
-          style: Theme.of(context).textTheme.title,
-        ),
-        new Text(
-          "Level: ${markerTask.vars[TaskNames.level.index]}",
-          style: Theme.of(context).textTheme.title,
-        ),
-      ],
-    );
-  }
+    TaskModel markerTask,
+  ) =>
+      Column(
+        mainAxisSize: MainAxisSize.max,
+        children: <Widget>[
+          Text(
+            markerTask.vars[TaskNames.name.index],
+            style: Theme.of(context).textTheme.title,
+          ),
+          Text(
+            "Level: ${markerTask.vars[TaskNames.level.index]}",
+            style: Theme.of(context).textTheme.title,
+          ),
+        ],
+      );
 
   void _onMapCreated(GoogleMapController controller) {
     Firestore.instance.collection('tasks').snapshots().listen(
@@ -115,11 +104,22 @@ class MapsDemoState extends State<MapsDemo> {
         mapController = controller;
         mapController.onMarkerTapped.add(
           (marker) {
+            final markerTask = tasks[marker.id];
+            final coord = markerTask.vars[TaskNames.coord.index] as GeoPoint;
+            mapController.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(
+                  target: LatLng(coord.latitude, coord.longitude),
+                  tilt: 30.0,
+                  zoom: 18.0,
+                ),
+              ),
+            );
             showBottomSheet<void>(
               context: context,
               builder: (BuildContext context) => _buildBottomSheet(
                     context,
-                    marker,
+                    markerTask,
                   ),
             );
           },
