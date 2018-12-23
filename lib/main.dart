@@ -1,20 +1,29 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:datetime_picker_formfield/datetime_picker_formfield.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:gplacespicker/gplacespicker.dart';
 import 'package:help_babushke/auth.dart';
 import 'package:help_babushke/models.dart';
+import 'package:intl/intl.dart';
 
 bool isLoggedIn;
 
 const ROUTE_MAP = "/";
 const ROUTE_ABOUT = "/about";
 const ROUTE_AUTH = "/auth";
+const ROUTE_CREATE_EVENT = "/create_event";
 
 const ROUTE_HOME = ROUTE_MAP;
 
+FirebaseUser user;
+UserModel userModel;
+
 void main() async {
-  final user = await FirebaseAuth.instance.currentUser();
+  user = await FirebaseAuth.instance.currentUser();
   runApp(
     MaterialApp(
       initialRoute: user != null &&
@@ -29,6 +38,7 @@ void main() async {
         ROUTE_HOME: (context) => HomeScreen(),
         ROUTE_AUTH: (context) => AuthScreen(),
         ROUTE_ABOUT: (context) => AboutScreen(),
+        ROUTE_CREATE_EVENT: (context) => CreateEventScreen(),
       },
     ),
   );
@@ -53,13 +63,9 @@ class HomeScreenState extends State<HomeScreen> {
   HomeScreenType type = HomeScreenType.MAP;
   final Map<String, TaskModel> tasks = Map<String, TaskModel>();
 
-  FirebaseUser user;
-  UserModel userModel;
-
   @override
   void initState() {
     FirebaseAuth.instance.currentUser().then((user) async {
-      this.user = user;
       userModel = UserModel(await Firestore.instance
           .collection("users")
           .document(user.uid)
@@ -67,7 +73,6 @@ class HomeScreenState extends State<HomeScreen> {
       setState(() {});
     });
 
-    // TODO: implement initState
     super.initState();
   }
 
@@ -99,25 +104,39 @@ class HomeScreenState extends State<HomeScreen> {
           Navigator.pop(context);
         },
       ),
+    ];
+
+    if (userModel != null && userModel.vars[UserNames.admin.index]) {
+      drawerWidgets.add(Divider());
+      drawerWidgets
+        ..add(
+          ListTile(
+            title: Text('Новобранцы'),
+            onTap: () {
+              setState(() => type = HomeScreenType.REQUESTS);
+              Navigator.pop(context);
+            },
+          ),
+        )
+        ..add(
+          ListTile(
+            title: Text('Добавить task'),
+            onTap: () {
+              Navigator.popAndPushNamed(context, ROUTE_CREATE_EVENT);
+            },
+          ),
+        );
+    }
+
+    drawerWidgets.add(Divider());
+    drawerWidgets.add(
       ListTile(
         title: Text('О приложении'),
         onTap: () {
           Navigator.popAndPushNamed(context, ROUTE_ABOUT);
         },
       ),
-    ];
-
-    if (userModel != null && userModel.vars[UserNames.admin.index]) {
-      drawerWidgets.add(
-        ListTile(
-          title: Text('Новобранцы'),
-          onTap: () {
-            setState(() => type = HomeScreenType.REQUESTS);
-            Navigator.pop(context);
-          },
-        ),
-      );
-    }
+    );
 
     Widget body;
     String title;
@@ -306,12 +325,169 @@ class HomeScreenState extends State<HomeScreen> {
 
 class AboutScreen extends StatelessWidget {
   @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: Text("ХУЕВО ТУТ"),
+        ),
+        body: Container(
+          child: Center(
+            child: Text("Мне так хуево в KFC сидеть, все бухают, а я нет(("),
+          ),
+        ),
+      );
+}
+
+class CreateEventScreen extends StatefulWidget {
+  @override
+  CreateEventScreenState createState() {
+    return CreateEventScreenState();
+  }
+}
+
+class CreateEventScreenState extends State<CreateEventScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  double level = 5;
+  Map<String, dynamic> place;
+  DateTime start, finish;
+  TextEditingController nameController = TextEditingController();
+  TextEditingController descController = TextEditingController();
+
+  @override
   Widget build(BuildContext context) {
-    // TODO: implement build
     return Scaffold(
-      body: Container(
-        child: Center(
-          child: Text("Мне так хуево в KFC сидеть, все бухают, а я нет(("),
+      key: _scaffoldKey,
+      appBar: AppBar(
+        title: Text("Добаление таска каска"),
+      ),
+      body: Center(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              TextFormField(
+                style: Theme.of(context).textTheme.title,
+                controller: nameController,
+                decoration: InputDecoration(
+                  hintText: "Название",
+                ),
+                validator: (value) {
+                  if (value.isEmpty) {
+                    return 'Ты ничего не забыл?';
+                  }
+                },
+              ),
+              TextFormField(
+                style: Theme.of(context).textTheme.subtitle,
+                controller: descController,
+                keyboardType: TextInputType.multiline,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: "Описание",
+                ),
+                validator: (value) {
+                  if (value.isEmpty) {
+                    return 'Ты ничего не забыл????';
+                  }
+                },
+              ),
+              Container(
+                padding: EdgeInsets.all(4),
+                child: Column(
+                  children: <Widget>[
+                    Text(
+                      "Важность:",
+                      style: Theme.of(context).textTheme.title,
+                    ),
+                    Slider(
+                      onChanged: (double value) {
+                        level = value;
+                        setState(() {});
+                      },
+                      value: level,
+                      divisions: 10,
+                      max: 10.0,
+                      min: 0.0,
+                      label: '${level.round()}',
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.all(4),
+                child: Column(
+                  children: <Widget>[
+                    Text(
+                      "Место:",
+                      style: Theme.of(context).textTheme.title,
+                    ),
+                    Center(
+                      child: Column(
+                        children: <Widget>[
+                          FlatButton(
+                              onPressed: () async {
+                                place = jsonDecode(
+                                    await Gplacespicker.openPlacePicker());
+                                setState(() {});
+                              },
+                              child: Text(place == null
+                                  ? "Выбрать..."
+                                  : "Выбрано: ${place["place"]}")),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+              DateTimePickerFormField(
+                decoration: InputDecoration(labelText: 'Начало'),
+                onChanged: (date) => setState(() => start = date),
+                format: DateFormat.Hm(),
+              ),
+              DateTimePickerFormField(
+                decoration: InputDecoration(labelText: 'Конец'),
+                onChanged: (date) => setState(() => finish = date),
+                format: DateFormat.Hm(),
+              ),
+              Center(
+                child: RaisedButton(
+                  onPressed: () async {
+                    if (_formKey.currentState.validate()) {
+                      if (place == null)
+                        SnackBar(content: Text('Не выбрана дата'));
+                      else {
+                        _scaffoldKey.currentState
+                            .showSnackBar(SnackBar(content: Text('Поехали')));
+
+                        final coord = GeoPoint(
+                          place['latitude'],
+                          place['longitude'],
+                        );
+                        await Firestore.instance.collection('tasks').add(
+                          {
+                            'adminId': user.uid,
+                            'name': nameController.value.text,
+                            'description': descController.value.text,
+                            'start': Timestamp.fromDate(start),
+                            'finish': Timestamp.fromDate(finish),
+                            'level': level,
+                            'coord': coord,
+                          },
+                        );
+
+                        Navigator.pop(context);
+                      }
+                    }
+                  },
+                  child: Text('Ага...'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
